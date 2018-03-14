@@ -3,6 +3,8 @@ import random
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
+from scipy.spatial.distance import cosine
+
 
 # Load data from CSV
 f_bodies = open('data/train_bodies.csv', 'r', encoding='utf-8')
@@ -15,9 +17,10 @@ for row in csv_bodies:
     bodies[body_id] = row['articleBody']
 f_bodies.close()
 
+all_unrelated, all_discuss, all_agree, all_disagree = [], [], [], []  # each article = (headline, body, stance)
+
 f_stances = open('data/train_stances.csv', 'r', encoding='utf-8')
 csv_stances = csv.DictReader(f_stances)
-all_unrelated, all_discuss, all_agree, all_disagree = [], [], [], []
 for row in csv_stances:
     body = bodies[int(row['Body ID'])]
     if row['Stance'] == 'unrelated':
@@ -44,7 +47,7 @@ val_disagree = all_disagree[len(all_disagree) * 9 // 10:]
 print('Train\t', len(train_unrelated), '\t', len(train_discuss), '\t', len(train_agree), '\t', len(train_disagree))
 print('Valid.\t', len(val_unrelated), '\t', len(val_discuss), '\t', len(val_agree), '\t', len(val_disagree))
 
-train_all = train_unrelated + train_discuss + train_agree + train_disagree
+train_all = train_unrelated + train_discuss + train_agree + train_disagree  # each article = (headline, body, stance)
 random.Random(0).shuffle(train_all)
 val_all = val_unrelated + val_discuss + val_agree + val_disagree
 random.Random(0).shuffle(val_all)
@@ -60,7 +63,7 @@ tf_idf = transformer.fit_transform(matrix)
 col_to_word = vectoriser.get_feature_names()
 
 # Load GLoVe word vectors
-f_glove = open("data/glove.6B.50d.txt", "rb")
+f_glove = open("data/glove.6B.50d.txt", "rb")  # download from https://nlp.stanford.edu/projects/glove/
 glove_vectors = {}
 for line in f_glove:
     glove_vectors[str(line.split()[0]).split("'")[1]] = np.array(list(map(float, line.split()[1:])))
@@ -68,7 +71,8 @@ for line in f_glove:
 #    print(key, value)
 #    break
 
-# Convert documents to GloVe vectors, by doing tf-idf of each word * GLoVe of word / total tf-idf for document
+# Convert documents to GloVe vectors, by computing tf-idf of each word * GLoVe of word / total tf-idf for document
+# Note: this takes forever
 doc_vectors = []
 # print(train_all[0][1])
 for row in range(tf_idf.shape[0]):  # testing: from len(train_all)
@@ -88,14 +92,15 @@ for row in range(tf_idf.shape[0]):  # testing: from len(train_all)
 doc_vectors = np.array(doc_vectors)
 print(doc_vectors.shape)
 
-# TODO move everything to Jupyter (otherwise re-running everything to test next parts would take too long)
-
+# Compute cosine similarity of GLoVe vectors for all headline-body pairs
 features = []  # indices correspond to train_all
 for i in range(len(train_all)):
-    print(doc_vectors[i], doc_vectors[i+len(train_all)])  # body, headline
-    # TODO cosine similarity of doc_vectors[i] and doc_vectors[i+len(train_all)]
-    features.append({'headline_body_similarity': 0.0})
-    break  # for testing, remove later
+    features.append({'headline_body_similarity': 1.0 - cosine(doc_vectors[i], doc_vectors[i+len(train_all)])})
+
+for i in range(20):
+    print(features[i]['headline_body_similarity'], train_all[i][2])  # unrelated should have lower than rest
+
+# TODO move everything to Jupyter (otherwise re-running everything to test next parts would take too long)
 
 # TODO other features: KL-Divergence,
     # entity count of entities in headline in body?,

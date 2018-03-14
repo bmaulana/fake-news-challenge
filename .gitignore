@@ -100,3 +100,6 @@ ENV/
 
 # IntelliJ
 .idea/
+
+# GLoVe
+data/glove.*
